@@ -1,0 +1,662 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Treino PPL</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(err => console.log(err));
+    });
+  }
+</script>
+<style>
+/* Layout: marca no topo, abas dos 6 treinos, painel escuro do treino atual com progresso, lista numerada de exercícios (séries tocáveis, carga, "Como executar" recolhido) e barra de descanso fixa embaixo.
+   Cores com função: azul = trabalho, coral = descanso, verde = concluído. */
+:root{
+  --bg:#E9ECF1;
+  --surface:#FFFFFF;
+  --ink:#121620;
+  --mute:#58606D;
+  --line:#D5DAE2;
+  --track:#DBE0E7;
+  --accent:#2B4BF2;
+  --accent-ink:#FFFFFF;
+  --rest:#D93A14;
+  --rest-bg:#FDEAE4;
+  --ok:#15803D;
+  --ok-bg:#DCF2E4;
+  --hero-bg:#0F1633;
+  --hero-ink:#FFFFFF;
+  --hero-mute:#A8B2D6;
+  --hero-track:rgba(255,255,255,.16);
+  --hero-fill:#8DA4FF;
+  --hero-ok:#4CD08A;
+  --font-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C0F14;--surface:#161B23;--ink:#ECEFF4;--mute:#9AA4B1;--line:#262D38;--track:#252C37;
+    --accent:#7F96FF;--accent-ink:#0C0F14;--rest:#FF7B5C;--rest-bg:#35201B;--ok:#4CC27F;--ok-bg:#15301F;
+    --hero-bg:#182047;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C0F14;--surface:#161B23;--ink:#ECEFF4;--mute:#9AA4B1;--line:#262D38;--track:#252C37;
+  --accent:#7F96FF;--accent-ink:#0C0F14;--rest:#FF7B5C;--rest-bg:#35201B;--ok:#4CC27F;--ok-bg:#15301F;
+  --hero-bg:#182047;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:16px 196px;
+}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* marca */
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand-l{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:38px;height:38px;border-radius:11px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.logo svg{width:24px;height:24px;display:block}
+.brand-t{display:flex;flex-direction:column;min-width:0}
+.brand-t b{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1}
+.brand-t span{font-size:13px;color:var(--mute);text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{font-size:12px;color:var(--mute);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
+.sync[data-s="ok"] i{background:var(--ok)}
+.sync[data-s="err"] i{background:var(--rest)}
+
+/* abas */
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tab{
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px 9px;text-align:left;
+  display:flex;flex-direction:column;min-width:0;position:relative;min-height:58px;
+}
+.tab small{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute);display:flex;gap:6px;align-items:center}
+.tab small em{font-style:normal;color:var(--accent);font-weight:700}
+.tab b{font-family:var(--font-display);font-size:21px;font-weight:600;line-height:1.1;letter-spacing:.01em}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tab[aria-selected="true"] small,.tab[aria-selected="true"] small em{color:inherit;opacity:.9}
+.tab.done::after{content:"";position:absolute;top:10px;right:10px;width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.tab[aria-selected="true"].done::after{background:var(--accent-ink)}
+
+/* painel do treino */
+.hero{background:var(--hero-bg);color:var(--hero-ink);border-radius:18px;padding:16px 16px 15px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--hero-mute)}
+.hero h1{font-family:var(--font-display);font-size:54px;line-height:.95;font-weight:700;margin:6px 0 0;letter-spacing:.005em;text-wrap:balance}
+.hero p{margin:6px 0 0;color:var(--hero-mute)}
+.prog{display:flex;align-items:center;gap:12px;margin-top:14px}
+.prog .bar{flex:1;height:8px;border-radius:4px;background:var(--hero-track);overflow:hidden}
+.prog .bar span{display:block;height:100%;width:0;background:var(--hero-fill);border-radius:4px;transition:width .25s ease}
+.prog.all .bar span{background:var(--hero-ok)}
+.prog em{font-style:normal;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* exercícios */
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ex{background:var(--surface);border:1px solid var(--line);border-radius:14px;min-width:0;overflow:hidden}
+.ex.done{background:var(--ok-bg);border-color:transparent}
+.ex-main{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;padding:14px 14px 12px}
+.badge{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-family:var(--font-display);font-size:19px;font-weight:700;color:var(--mute);margin-top:1px}
+.badge svg{width:18px;height:18px;display:none}
+.ex.done .badge{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.ex.done .badge .n{display:none}
+.ex.done .badge svg{display:block}
+.ex-content{display:flex;flex-direction:column;gap:12px;min-width:0}
+.ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.ex h3{margin:0;font-family:var(--font-display);font-size:24px;font-weight:600;line-height:1.1;letter-spacing:.005em;min-width:0}
+.ex-meta{display:flex;flex-direction:column;align-items:flex-end;flex:none}
+.ex-meta b{font-family:var(--font-display);font-size:21px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--accent)}
+.ex.done .ex-meta b{color:var(--ok)}
+.ex-meta span{font-size:12px;color:var(--rest);font-weight:600;white-space:nowrap}
+.ex-body{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.sets{display:flex;gap:8px;flex-wrap:wrap}
+.set{
+  width:48px;height:46px;border-radius:11px;border:1.5px solid var(--line);background:var(--bg);
+  font-family:var(--font-display);font-size:22px;font-weight:600;line-height:1;
+  transition:transform .08s ease;
+}
+.set:active{transform:scale(.94)}
+.set[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ex.done .set[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.load{display:flex;flex-direction:column;gap:2px;align-items:flex-end}
+.load label{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.load .field{display:flex;align-items:baseline;gap:6px}
+.load input{
+  width:92px;height:46px;border-radius:11px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);
+  text-align:right;padding:0 10px;font-family:var(--font-display);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;
+}
+.load .unit{font-weight:600;color:var(--mute);font-size:15px}
+.load .prev{font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;min-height:16px}
+
+/* como executar */
+.how-btn{
+  width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:0 14px 0 60px;background:transparent;border:0;border-top:1px solid var(--line);
+  font-size:14px;font-weight:600;color:var(--mute);text-align:left;
+}
+.ex.done .how-btn{border-top-color:rgba(0,0,0,.08)}
+.how-btn svg{width:20px;height:20px;flex:none;transition:transform .2s ease}
+.how-btn[aria-expanded="true"]{color:var(--ink)}
+.how-btn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.how{display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows .22s ease,visibility 0s linear .22s}
+.how[data-open="true"]{grid-template-rows:1fr;visibility:visible;transition:grid-template-rows .22s ease,visibility 0s}
+.how-clip{overflow:hidden;min-height:0}
+.how-in{padding:2px 14px 14px 60px;display:flex;flex-direction:column;gap:8px}
+.how-in ol{margin:0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:8px}
+.how-in li{counter-increment:s;display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;font-size:15px;line-height:1.4}
+.how-in li::before{content:counter(s);font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--accent);background:var(--bg);border-radius:50%;width:22px;height:22px;display:grid;place-items:center;margin-top:1px}
+.how-in p{margin:0;font-size:14px;line-height:1.4;padding:8px 10px;border-radius:10px;background:var(--rest-bg);color:var(--ink)}
+.how-in p b{color:var(--rest);font-weight:700}
+
+.notes{display:flex;flex-direction:column;gap:6px}
+.notes label{font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.notes textarea{
+  width:100%;min-height:84px;resize:vertical;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  padding:10px 12px;font:inherit;
+}
+
+/* descanso */
+.timer{
+  position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);
+  padding:0 max(16px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(16px,env(safe-area-inset-left,0px));
+  box-shadow:0 -6px 20px rgba(10,14,30,.08);
+}
+.timer .track{height:4px;background:var(--track);margin:0 calc(-1 * max(16px,env(safe-area-inset-left,0px)))}
+.timer .track span{display:block;height:100%;width:0;background:var(--rest)}
+.timer-in{max-width:560px;margin:0 auto;padding:10px 0 12px;display:flex;flex-direction:column;gap:10px}
+.timer.fin{background:var(--ok-bg)}
+.timer.fin .track span{background:var(--ok)}
+.t-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.t-label{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.t-time{font-family:var(--font-display);font-size:48px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;min-width:100px}
+.timer.on .t-time{color:var(--rest)}
+.timer:not(.on):not(.fin) .t-time{color:var(--mute)}
+.timer.fin .t-time{color:var(--ok)}
+.t-left{display:flex;flex-direction:column}
+.t-btns{display:flex;gap:8px}
+.btn{height:46px;min-width:50px;padding:0 14px;border-radius:12px;border:1.5px solid var(--line);background:transparent;font-weight:600;font-variant-numeric:tabular-nums}
+.btn.primary{background:var(--rest);border-color:var(--rest);color:#fff;min-width:96px}
+:root[data-theme="dark"] .btn.primary{color:#1A0C08}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#1A0C08}}
+.timer.fin .btn.primary{background:var(--ok);border-color:var(--ok);color:#fff}
+.presets{display:flex;gap:6px}
+.presets button{flex:1;height:38px;border-radius:9px;border:1.5px solid var(--line);background:transparent;font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
+.presets button[aria-pressed="true"]{border-color:var(--rest);color:var(--rest)}
+
+@media (max-width:380px){.tabs{grid-template-columns:repeat(2,1fr)}.hero h1{font-size:46px}.ex-main{gap:10px}.how-btn,.how-in{padding-left:56px}}
+@media (prefers-reduced-motion:reduce){.prog .bar span,.how,.how-btn svg,.set{transition:none}}
+</style>
+
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-l">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="1.5" y="8" width="3" height="8" rx="1"/><rect x="5.5" y="5.5" width="3.5" height="13" rx="1.2"/><rect x="9" y="11" width="6" height="2" rx="1"/><rect x="15" y="5.5" width="3.5" height="13" rx="1.2"/><rect x="19.5" y="8" width="3" height="8" rx="1"/></svg>
+      </div>
+      <div class="brand-t">
+        <b>Treino PPL</b>
+        <span id="date"></span>
+      </div>
+    </div>
+    <div class="sync" id="sync" data-s="local"><i></i><span id="syncTxt">Neste aparelho</span></div>
+  </div>
+
+  <nav class="tabs" id="tabs" aria-label="Treinos da semana"></nav>
+
+  <header class="hero">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title"></h1>
+    <p id="focus"></p>
+    <div class="prog" id="prog">
+      <div class="bar"><span id="progFill"></span></div>
+      <em id="progTxt"></em>
+    </div>
+  </header>
+
+  <ul class="list" id="list"></ul>
+
+  <div class="notes">
+    <label for="notes">Observações da semana</label>
+    <textarea id="notes" placeholder="Dor, carga que travou, ajuste de máquina..."></textarea>
+  </div>
+</div>
+
+<div class="timer" id="timer" role="timer" aria-live="off">
+  <div class="track"><span id="tFill"></span></div>
+  <div class="timer-in">
+    <div class="t-row">
+      <div class="t-left">
+        <span class="t-label" id="tLabel">Descanso</span>
+        <span class="t-time" id="tTime">1:30</span>
+      </div>
+      <div class="t-btns">
+        <button class="btn" id="tMinus" type="button" aria-label="Menos 15 segundos">−15</button>
+        <button class="btn" id="tPlus" type="button" aria-label="Mais 15 segundos">+15</button>
+        <button class="btn primary" id="tGo" type="button">Iniciar</button>
+      </div>
+    </div>
+    <div class="presets" id="presets"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  /* [id, nome, séries, repetições, descanso em s, passos, evitar] */
+  var PLAN=[
+    {id:"push-a",day:"Seg",name:"Push A",focus:"Peito, ombro e tríceps",ex:[
+      ["supino-reto","Supino reto",4,"6-8",150,
+        ["Deite com os olhos sob a barra, escápulas juntas e pés firmes no chão.","Desça a barra até a linha do mamilo, com os cotovelos a cerca de 45° do tronco.","Empurre para cima sem tirar o quadril do banco."],
+        "Abrir os cotovelos a 90° e quicar a barra no peito."],
+      ["desenv-maq","Desenvolvimento máquina",3,"8-10",120,
+        ["Ajuste o banco para que as pegadas fiquem na altura dos ombros e encoste bem as costas.","Empurre até quase estender os cotovelos.","Desça devagar, em 2 a 3 segundos."],
+        "Arquear a lombar e encolher os ombros em direção às orelhas."],
+      ["crucifixo-maq","Crucifixo máquina",3,"10-12",90,
+        ["Ajuste o assento para os braços ficarem na altura do peito, com as escápulas encostadas.","Feche os braços com os cotovelos levemente flexionados, como um abraço.","Volte devagar até sentir o peito alongar."],
+        "Deixar os ombros irem para a frente ou soltar a carga na volta."],
+      ["elev-lat-halt","Elevação lateral halteres",3,"10-12",75,
+        ["Em pé, tronco firme, halteres ao lado do corpo e cotovelos levemente flexionados.","Suba os braços para os lados até a altura dos ombros, com o cotovelo um pouco acima da mão.","Desça em 2 a 3 segundos."],
+        "Usar impulso do corpo e subir acima da linha dos ombros."],
+      ["triceps-testa","Tríceps testa polia",3,"8-10",75,
+        ["Deitado no banco, com a polia baixa atrás da cabeça, segure a barra com os cotovelos apontando para o teto.","Estenda os cotovelos até quase travar; só o antebraço se move.","Volte devagar até a barra passar perto da testa."],
+        "Abrir os cotovelos e usar os ombros para ajudar."]]},
+    {id:"pull-a",day:"Ter",name:"Pull A",focus:"Costas, bíceps e abdômen",ex:[
+      ["puxada-aberta","Puxada aberta neutra",4,"6-8",150,
+        ["Sente com as coxas travadas sob o apoio, pegada neutra (palmas frente a frente) e peito aberto.","Puxe a barra até a altura do queixo, levando os cotovelos para baixo e para trás.","Suba em 2 a 3 segundos, alongando as costas."],
+        "Balançar o tronco e puxar só com os braços, sem mover as escápulas."],
+      ["remada-cavalinho","Remada cavalinho máquina",3,"6-8",120,
+        ["Apoie o peito, mantenha a coluna neutra e os pés firmes; pegue a alça com firmeza.","Puxe levando os cotovelos para trás e aproxime as escápulas.","Controle a volta até alongar as costas."],
+        "Tirar o peito do apoio e jogar o tronco para ajudar."],
+      ["remada-baixa","Remada baixa máquina",3,"8-10",105,
+        ["Sente com os joelhos levemente flexionados e a coluna alta.","Puxe a alça até o abdômen, com os cotovelos junto ao corpo.","Segure 1 segundo contraindo as costas e volte devagar."],
+        "Se inclinar muito para trás durante a puxada."],
+      ["crucifixo-inv","Crucifixo invertido polia",3,"10-12",75,
+        ["Com as polias na altura dos ombros e os cabos cruzados, dê um passo atrás e mantenha o tronco firme.","Abra os braços para trás e para os lados, com os cotovelos levemente flexionados.","Aperte as escápulas no fim e volte devagar."],
+        "Puxar com a lombar e usar carga que faz os braços dobrarem."],
+      ["rosca-direta","Rosca direta barra",3,"8-10",75,
+        ["Em pé, pés na largura do quadril, pegada na largura dos ombros e cotovelos junto ao tronco.","Suba a barra flexionando os cotovelos até contrair o bíceps.","Desça em 2 a 3 segundos, estendendo quase por completo."],
+        "Balançar o corpo e jogar os cotovelos para a frente."],
+      ["abd-declinado","Abdômen banco declinado",3,"8-10",60,
+        ["Prenda os pés no banco e cruze os braços no peito (ou segure um anilha); pescoço neutro.","Enrole a coluna subindo o tronco, expirando durante a subida.","Desça controlando, sem relaxar o abdômen."],
+        "Puxar o pescoço com as mãos e usar o impulso do quadril."]]},
+    {id:"legs-a",day:"Qua",name:"Legs A",focus:"Ênfase em quadríceps",ex:[
+      ["hack","Agachamento hack",4,"8-10",150,
+        ["Apoie as costas no encosto, com os pés na largura dos ombros no meio da plataforma e as pontas levemente abertas.","Desça até os joelhos passarem de 90°, alinhados com os pés.","Empurre pelo meio do pé sem travar os joelhos no topo."],
+        "Tirar o quadril do encosto e deixar os joelhos caírem para dentro."],
+      ["leg-press","Leg press",3,"8-10",120,
+        ["Pés na largura dos ombros, com lombar e quadril encostados no banco o tempo todo.","Desça até cerca de 90° de flexão dos joelhos.","Empurre sem travar os joelhos no topo, em ritmo controlado."],
+        "Descer a ponto de o quadril sair do banco e arredondar a lombar."],
+      ["extensora","Cadeira extensora",3,"10-12",90,
+        ["Ajuste o encosto para o joelho ficar alinhado ao eixo da máquina e segure nas alças.","Estenda os joelhos até quase a extensão total e segure 1 segundo contraindo o quadríceps.","Desça em 2 a 3 segundos."],
+        "Usar impulso e deixar a carga cair na volta."],
+      ["abdutora","Cadeira abdutora",3,"10-12",75,
+        ["Sente com as costas encostadas, pés nos apoios e joelhos juntos.","Abra as pernas até a amplitude confortável e segure 1 segundo.","Volte devagar, sem deixar as placas se encostarem."],
+        "Balançar o tronco e usar carga que tira as costas do encosto."],
+      ["pant-pe","Panturrilha em pé",4,"10-12",75,
+        ["Apoie as pontas dos pés na plataforma, com os calcanhares livres e os joelhos quase estendidos.","Desça os calcanhares até alongar a panturrilha.","Suba o máximo possível e segure 1 segundo no topo."],
+        "Flexionar os joelhos para ajudar e encurtar a amplitude."]]},
+    {id:"push-b",day:"Qui",name:"Push B",focus:"Ênfase em ombro e peitoral superior",ex:[
+      ["desenv-halt","Desenvolvimento com halteres",4,"6-8",150,
+        ["Sente com o encosto firme, halteres na altura das orelhas e cotovelos à frente do corpo.","Empurre os halteres para cima até quase estender os cotovelos.","Desça controlando até o nível das orelhas."],
+        "Arquear a lombar e bater os halteres no topo."],
+      ["paralelas","Paralelas",3,"8-10",120,
+        ["Apoie nas barras com os braços estendidos e o tronco levemente inclinado à frente para focar no peito.","Desça até os cotovelos formarem cerca de 90°.","Empurre de volta sem encolher os ombros."],
+        "Descer além do que o ombro tolera; se estiver pesado, use a máquina assistida."],
+      ["supino-incl","Supino inclinado halteres",3,"8-10",120,
+        ["Banco a cerca de 30°, escápulas juntas e halteres na linha do peito.","Empurre até quase juntar os halteres acima do peito, com os antebraços na vertical.","Desça devagar."],
+        "Inclinar o banco demais (vira exercício de ombro) e abrir demais os cotovelos."],
+      ["elev-lat-polia","Elevação lateral polia",3,"12-15",75,
+        ["De lado para a polia baixa, segure a alça com a mão mais distante e mantenha o tronco firme.","Suba o braço pelo lado até a altura do ombro.","Volte devagar, mantendo a tensão no cabo."],
+        "Usar impulso do quadril e subir acima do ombro."],
+      ["triceps-corda","Tríceps corda (pulley)",3,"10-12",75,
+        ["Em pé, diante da polia alta, com os cotovelos junto às costelas.","Estenda os cotovelos puxando a corda para baixo e abra as pontas no final.","Volte até cerca de 90°, sem tirar os cotovelos do lugar."],
+        "Balançar o tronco e deixar os cotovelos abrirem."]]},
+    {id:"pull-b",day:"Sex",name:"Pull B",focus:"Costas, bíceps e abdômen",ex:[
+      ["puxada-tri","Puxada triângulo",3,"10-12",120,
+        ["Sente com as coxas travadas e segure o triângulo com as palmas frente a frente; peito aberto.","Puxe até o triângulo chegar ao peito, com os cotovelos para baixo.","Suba controlando, até alongar as costas."],
+        "Inclinar o tronco muito para trás e puxar só com os braços."],
+      ["pulley-v","Pulley V",3,"8-10",105,
+        ["Sente com as coxas travadas, segure a alça em V e incline o tronco levemente para trás, peito aberto.","Puxe a alça até o peito, com os cotovelos para baixo e junto ao corpo.","Volte devagar."],
+        "Balançar o tronco e puxar com os ombros encolhidos."],
+      ["remada-unilat","Remada unilateral halter",3,"8-10",105,
+        ["Apoie joelho e mão no banco, coluna neutra e halter pendurado com o braço estendido.","Puxe o halter em direção ao quadril, com o cotovelo junto ao corpo.","Desça alongando as costas, sem girar o tronco."],
+        "Girar o tronco e puxar o halter para cima do peito."],
+      ["face-pull","Face pull (polia)",3,"12-15",75,
+        ["Com a corda na polia na altura do rosto, dê um passo atrás e mantenha o tronco firme.","Puxe a corda em direção ao rosto, abrindo as pontas e levando os cotovelos para trás e para cima.","Volte devagar."],
+        "Usar carga alta que faz o corpo balançar e puxar com a lombar."],
+      ["rosca-martelo","Rosca martelo polia",3,"8-10",75,
+        ["Em pé, com os cotovelos junto ao tronco e pegada neutra (palmas frente a frente).","Flexione os cotovelos até contrair o braço.","Desça devagar, mantendo o punho reto."],
+        "Balançar o corpo e deixar os cotovelos irem para a frente."],
+      ["abdominal","Abdominal",3,"10-12",60,
+        ["Deitado, com os joelhos flexionados e os pés no chão, mãos ao lado da cabeça sem puxar o pescoço.","Suba o tronco enrolando a coluna e expire no topo.","Desça devagar, sem relaxar o abdômen."],
+        "Puxar o pescoço e usar o impulso para subir."]]},
+    {id:"legs-b",day:"Sáb",name:"Legs B",focus:"Ênfase em posterior e glúteo",ex:[
+      ["stiff","Stiff (halteres ou barra)",3,"8-10",150,
+        ["Em pé, pés na largura do quadril, peso à frente das coxas e joelhos levemente flexionados.","Empurre o quadril para trás e desça com as costas retas até sentir o posterior esticar.","Suba contraindo o glúteo."],
+        "Arredondar a lombar e agachar em vez de levar o quadril para trás."],
+      ["mesa-flexora","Mesa flexora",3,"8-12",90,
+        ["Deite com o quadril colado ao banco e o apoio logo acima dos calcanhares.","Flexione os joelhos levando os calcanhares em direção ao glúteo.","Desça em 2 a 3 segundos."],
+        "Levantar o quadril do banco e usar impulso."],
+      ["bulgaro","Agachamento búlgaro (cada perna)",3,"8-10",120,
+        ["Apoie o pé de trás no banco, com o tronco levemente inclinado à frente e a passada longa.","Desça flexionando o joelho da frente até a coxa ficar paralela ao chão.","Suba empurrando pelo calcanhar."],
+        "Apoiar o peso na perna de trás e deixar o joelho cair para dentro."],
+      ["adutora","Cadeira adutora",3,"10-12",75,
+        ["Sente com as costas encostadas, pernas abertas numa amplitude confortável e pés nos apoios.","Feche as pernas contraindo a parte interna da coxa e segure 1 segundo.","Volte devagar."],
+        "Abrir além do que é confortável e usar impulso."],
+      ["pant-sentada","Panturrilha sentada",4,"12-15",75,
+        ["Sente com os joelhos a 90° sob o apoio e as pontas dos pés na plataforma.","Desça os calcanhares alongando a panturrilha.","Suba o máximo possível e segure 1 segundo no topo."],
+        "Fazer movimentos curtos e quicar na parte de baixo."]]}
+  ].map(function(w){
+    w.ex=w.ex.map(function(a){return {id:a[0],n:a[1],s:a[2],r:a[3],rest:a[4],how:a[5],avoid:a[6]}});
+    return w;
+  });
+
+  var KEY="treino-ppl-v1";
+  var S={v:1,u:0,weights:{},hist:{},done:{},notes:{}};
+  var cur=0, T="", TODAY=-1;
+  var $=function(id){return document.getElementById(id)};
+  var pad=function(n){return String(n).padStart(2,"0")};
+  function keyOf(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+  function fmt(s){return Math.floor(s/60)+":"+pad(s%60)}
+  function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+  var CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+  /* ---------- armazenamento ---------- */
+  function normalize(o){
+    var base={v:1,u:0,weights:{},hist:{},done:{},notes:{}};
+    if(o&&typeof o==="object"){for(var k in base){if(o[k]!==undefined)base[k]=o[k]}}
+    var cut=new Date();cut.setDate(cut.getDate()-21);var ck=keyOf(cut);
+    Object.keys(base.done).forEach(function(d){if(d<ck)delete base.done[d]});
+    return base;
+  }
+  function loadLocal(){
+    try{var r=localStorage.getItem(KEY);if(r){S=normalize(JSON.parse(r))}}catch(e){}
+  }
+  function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+  var ref=null,writing=false,again=false,wt=null;
+  function setSync(s){
+    var n=$("sync");n.setAttribute("data-s",s);
+    $("syncTxt").textContent=s==="ok"?"Salvo na nuvem":(s==="err"?"Falha ao salvar":"Neste aparelho");
+  }
+  function touch(){
+    S.u=Date.now();saveLocal();
+    clearTimeout(wt);wt=setTimeout(flush,700);
+  }
+  function flush(){
+    if(!ref)return;
+    if(writing){again=true;return}
+    writing=true;
+    ref.set(JSON.parse(JSON.stringify(S))).then(function(){setSync("ok")},function(){setSync("err")}).then(function(){
+      writing=false;if(again){again=false;flush()}
+    });
+  }
+  function editing(){var a=document.activeElement;return a&&(a.tagName==="INPUT"||a.tagName==="TEXTAREA")}
+
+  /* ---------- áudio, vibração, tela ativa ---------- */
+  var AC=null,wl=null;
+  function audio(){
+    try{
+      if(!AC){var C=window.AudioContext||window.webkitAudioContext;if(C)AC=new C()}
+      if(AC&&AC.state==="suspended")AC.resume();
+    }catch(e){}
+    return AC;
+  }
+  function beep(){
+    var c=audio();if(!c)return;
+    try{
+      for(var i=0;i<3;i++){
+        var o=c.createOscillator(),g=c.createGain(),t=c.currentTime+i*0.28;
+        o.type="sine";o.frequency.value=i===2?1175:880;
+        g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.35,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+        o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+0.22);
+      }
+    }catch(e){}
+  }
+  function buzz(){try{if(navigator.vibrate)navigator.vibrate([220,110,220,110,320])}catch(e){}}
+  function keepAwake(){
+    try{
+      if(navigator.wakeLock&&!wl){
+        navigator.wakeLock.request("screen").then(function(l){wl=l;l.addEventListener("release",function(){wl=null})},function(){});
+      }
+    }catch(e){}
+  }
+  function letSleep(){try{if(wl){wl.release();wl=null}}catch(e){}}
+
+  /* ---------- timer de descanso ---------- */
+  var R={sel:90,total:90,end:0,on:false,fin:false,iv:null};
+  var PRESETS=[60,90,120,150,180];
+  function renderTimer(){
+    var box=$("timer"),left=0;
+    if(R.on){left=Math.max(0,Math.ceil((R.end-Date.now())/1000))}
+    box.classList.toggle("on",R.on);box.classList.toggle("fin",R.fin);
+    if(R.fin){$("tTime").textContent="Pronto";$("tLabel").textContent="Descanso acabou";$("tFill").style.width="100%"}
+    else if(R.on){$("tTime").textContent=fmt(left);$("tLabel").textContent="Descansando";$("tFill").style.width=(100*(1-left/R.total))+"%"}
+    else{$("tTime").textContent=fmt(R.sel);$("tLabel").textContent="Descanso";$("tFill").style.width="0"}
+    $("tGo").textContent=R.on?"Parar":(R.fin?"Repetir":"Iniciar");
+    Array.prototype.forEach.call($("presets").children,function(b){b.setAttribute("aria-pressed",String(+b.dataset.s===R.sel&&!R.fin))});
+    if(R.on&&left===0)finish();
+  }
+  function loop(){if(!R.iv)R.iv=setInterval(renderTimer,250)}
+  function unloop(){if(R.iv){clearInterval(R.iv);R.iv=null}}
+  function startTimer(sec){
+    audio();
+    R.sel=sec;R.total=sec;R.end=Date.now()+sec*1000;R.on=true;R.fin=false;
+    keepAwake();loop();renderTimer();
+  }
+  function stopTimer(){R.on=false;R.fin=false;unloop();renderTimer()}
+  function finish(){
+    R.on=false;R.fin=true;unloop();beep();buzz();letSleep();renderTimer();
+  }
+  function adjust(d){
+    if(R.on){
+      R.end=Math.max(Date.now()+1000,R.end+d*1000);R.total=Math.max(1,R.total+d);
+      R.sel=Math.max(15,R.sel+d);
+    }else{R.fin=false;R.sel=Math.max(15,R.sel+d)}
+    renderTimer();
+  }
+  PRESETS.forEach(function(s){
+    var b=el("button",null,fmt(s));b.type="button";b.dataset.s=s;
+    b.addEventListener("click",function(){startTimer(s)});
+    $("presets").appendChild(b);
+  });
+  $("tGo").addEventListener("click",function(){if(R.on)stopTimer();else startTimer(R.sel)});
+  $("tMinus").addEventListener("click",function(){audio();adjust(-15)});
+  $("tPlus").addEventListener("click",function(){audio();adjust(15)});
+  document.addEventListener("visibilitychange",function(){
+    if(document.visibilityState==="visible"){if(R.on){keepAwake();renderTimer()}}
+  });
+
+  /* ---------- treino ---------- */
+  function doneArr(w,ex){
+    var d=S.done[T];return (d&&d[w.id]&&d[w.id][ex.id])||null;
+  }
+  function countW(w){
+    var done=0,total=0;
+    w.ex.forEach(function(ex){
+      total+=ex.s;var a=doneArr(w,ex);
+      if(a)for(var i=0;i<ex.s;i++)if(a[i])done++;
+    });
+    return {done:done,total:total};
+  }
+  function prevOf(exId){
+    var h=S.hist[exId]||[];
+    for(var i=h.length-1;i>=0;i--){if(h[i].d!==T)return h[i]}
+    return null;
+  }
+  function prevText(exId){
+    var p=prevOf(exId);if(!p)return "";
+    var m=p.d.split("-");
+    return "Antes: "+p.kg+" kg ("+m[2]+"/"+m[1]+")";
+  }
+  function toggleSet(w,ex,i){
+    var day=S.done[T]||(S.done[T]={});
+    var wk=day[w.id]||(day[w.id]={});
+    var arr=wk[ex.id]||(wk[ex.id]=Array(ex.s).fill(false));
+    arr[i]=!arr[i];
+    touch();refresh();
+    if(arr[i]){
+      var c=countW(w);
+      if(c.done<c.total)startTimer(ex.rest);else stopTimer();
+    }
+  }
+  function onWeight(ex,raw){
+    S.weights[ex.id]=raw;
+    var kg=parseFloat(String(raw).replace(",","."));
+    if(isFinite(kg)){
+      var h=S.hist[ex.id]||(S.hist[ex.id]=[]);
+      var last=h[h.length-1];
+      if(last&&last.d===T)last.kg=kg;else h.push({d:T,kg:kg});
+      if(h.length>30)h.splice(0,h.length-30);
+    }
+    touch();
+  }
+
+  var rows=[];
+  function buildList(){
+    var w=PLAN[cur];rows=[];
+    var list=$("list");list.innerHTML="";
+    w.ex.forEach(function(ex,idx){
+      var li=el("li","ex");
+      var main=el("div","ex-main");
+      var badge=el("div","badge");
+      badge.appendChild(el("span","n",String(idx+1)));
+      badge.insertAdjacentHTML("beforeend",CHECK);
+      var content=el("div","ex-content");
+      var top=el("div","ex-top");
+      top.appendChild(el("h3",null,ex.n));
+      var meta=el("div","ex-meta");
+      meta.appendChild(el("b",null,ex.s+" × "+ex.r));
+      meta.appendChild(el("span",null,"desc. "+fmt(ex.rest)));
+      top.appendChild(meta);
+      var body=el("div","ex-body");
+      var sets=el("div","sets");
+      var chips=[];
+      for(var i=0;i<ex.s;i++){
+        (function(i){
+          var b=el("button","set",String(i+1));b.type="button";
+          b.setAttribute("aria-label","Série "+(i+1)+" de "+ex.s+" de "+ex.n);
+          b.setAttribute("aria-pressed","false");
+          b.addEventListener("click",function(){toggleSet(w,ex,i)});
+          sets.appendChild(b);chips.push(b);
+        })(i);
+      }
+      var load=el("div","load");
+      var lab=el("label",null,"Carga");lab.htmlFor="w-"+ex.id;
+      var field=el("div","field");
+      var inp=document.createElement("input");
+      inp.id="w-"+ex.id;inp.type="text";inp.inputMode="decimal";inp.autocomplete="off";inp.placeholder="0";
+      inp.value=S.weights[ex.id]!=null?S.weights[ex.id]:"";
+      inp.addEventListener("input",function(){onWeight(ex,inp.value)});
+      field.appendChild(inp);field.appendChild(el("span","unit","kg"));
+      load.appendChild(lab);load.appendChild(field);
+      load.appendChild(el("span","prev",prevText(ex.id)));
+      body.appendChild(sets);body.appendChild(load);
+      content.appendChild(top);content.appendChild(body);
+      main.appendChild(badge);main.appendChild(content);
+
+      var hid="how-"+ex.id;
+      var btn=el("button","how-btn");btn.type="button";
+      btn.setAttribute("aria-expanded","false");btn.setAttribute("aria-controls",hid);
+      btn.appendChild(el("span",null,"Como executar"));
+      btn.insertAdjacentHTML("beforeend",CHEV);
+      var how=el("div","how");how.id=hid;how.dataset.open="false";
+      var clip=el("div","how-clip");var inn=el("div","how-in");
+      var ol=document.createElement("ol");
+      ex.how.forEach(function(t){ol.appendChild(el("li",null,t))});
+      var av=el("p");av.appendChild(el("b",null,"Evite: "));av.appendChild(document.createTextNode(ex.avoid));
+      inn.appendChild(ol);inn.appendChild(av);clip.appendChild(inn);how.appendChild(clip);
+      btn.addEventListener("click",function(){
+        var o=btn.getAttribute("aria-expanded")==="true";
+        btn.setAttribute("aria-expanded",String(!o));how.dataset.open=String(!o);
+      });
+
+      li.appendChild(main);li.appendChild(btn);li.appendChild(how);
+      list.appendChild(li);
+      rows.push({li:li,ex:ex,chips:chips});
+    });
+    var n=$("notes");n.value=S.notes[w.id]||"";
+    refresh();
+  }
+  function refresh(){
+    T=keyOf(new Date());
+    var w=PLAN[cur];
+    rows.forEach(function(r){
+      var a=doneArr(w,r.ex),all=true;
+      r.chips.forEach(function(c,i){
+        var on=!!(a&&a[i]);c.setAttribute("aria-pressed",String(on));if(!on)all=false;
+      });
+      r.li.classList.toggle("done",all);
+    });
+    var c=countW(w);
+    $("progFill").style.width=(c.total?100*c.done/c.total:0)+"%";
+    $("progTxt").textContent=c.done===c.total?"Treino concluído":c.done+" de "+c.total+" séries";
+    $("prog").classList.toggle("all",c.done===c.total);
+    Array.prototype.forEach.call($("tabs").children,function(t,i){
+      var k=countW(PLAN[i]);t.classList.toggle("done",k.total>0&&k.done===k.total);
+    });
+  }
+  function selectTab(i){
+    cur=i;
+    Array.prototype.forEach.call($("tabs").children,function(t,j){t.setAttribute("aria-selected",String(j===i))});
+    var w=PLAN[i];
+    $("title").textContent=w.name;$("focus").textContent=w.focus;
+    $("eyebrow").textContent="Treino "+(i+1)+" de "+PLAN.length+(i===TODAY?" · hoje":"");
+    buildList();
+  }
+
+  /* ---------- início ---------- */
+  var now=new Date();
+  $("date").textContent=now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"short"});
+  var wd=now.getDay();
+  TODAY=wd===0?-1:wd-1;
+  PLAN.forEach(function(w,i){
+    var b=el("button","tab");b.type="button";b.setAttribute("role","tab");b.setAttribute("aria-selected","false");
+    var sm=el("small",null,w.day);
+    if(i===TODAY)sm.appendChild(el("em",null,"hoje"));
+    b.appendChild(sm);b.appendChild(el("b",null,w.name));
+    b.addEventListener("click",function(){selectTab(i)});
+    $("tabs").appendChild(b);
+  });
+  $("notes").addEventListener("input",function(){
+    S.notes[PLAN[cur].id]=$("notes").value;touch();
+  });
+
+  loadLocal();
+  selectTab(TODAY<0?0:TODAY);
+  renderTimer();
+
+  /* nuvem: mesmo treino em qualquer aparelho */
+  (function(){
+    if(!window.claude||!window.claude.use)return;
+    Promise.all([window.claude.use("db"),window.claude.use("user")]).then(function(r){
+      var db=r[0],user=r[1];if(!db||!user)return null;
+      return user.id().then(function(id){
+        if(!id)return;
+        ref=db.doc("data/users/"+id+"/treino");
+        ref.onSnapshot(function(snap){
+          if(snap.metadata&&snap.metadata.hasPendingWrites)return;
+          if(!snap.exists){if(S.u>0)flush();else setSync("ok");return}
+          var rem=normalize(JSON.parse(JSON.stringify(snap.data())));
+          if(rem.u>S.u){
+            S=rem;saveLocal();
+            if(!editing())buildList();else refresh();
+          }else if(rem.u<S.u){flush()}
+          setSync("ok");
+        },function(){setSync("local")});
+      });
+    }).catch(function(){});
+  })();
+})();
+</script>
+
+</body></html>
